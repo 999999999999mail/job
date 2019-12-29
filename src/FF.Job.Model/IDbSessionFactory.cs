@@ -58,7 +58,7 @@ namespace FF.Job.Model
                 throw new ArgumentNullException($"{configuration.Key} in appsettings.json");
             }
             services.Configure<DbOptions>(configuration);
-            services.AddScoped<IDbSessionFactory, DbSessionFactory>();
+            services.AddTransient<IDbSessionFactory, DbSessionFactory>();
             return services;
         }
     }

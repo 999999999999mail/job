@@ -6,6 +6,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 
 namespace FF.Job.Service
 {
@@ -15,7 +16,9 @@ namespace FF.Job.Service
 
         private readonly DbOptions _dbOptions;
 
-        private readonly ConcurrentDictionary<string, string> _dic = new ConcurrentDictionary<string, string>();
+        private readonly ConcurrentDictionary<string, string> _task = new ConcurrentDictionary<string, string>();
+
+        private readonly ConcurrentDictionary<string, ActionBlock<string>> _queues = new ConcurrentDictionary<string, ActionBlock<string>>();
 
         private readonly GameService _gameService;
 
@@ -24,6 +27,10 @@ namespace FF.Job.Service
             _logger = logger;
             _dbOptions = options.Value;
             _gameService = gameService;
+            foreach (var item in _dbOptions.ConnectionStrings)
+            {
+                _queues.TryAdd(item.Name, new ActionBlock<string>(DataStat));
+            }
         }
 
         public void Start(string gamePlatform)
@@ -37,7 +44,7 @@ namespace FF.Job.Service
         public void ExecAsync(string gamePlatform, string ownerName)
         {
             var key = $"{gamePlatform}_{ownerName}";
-            if (_dic.TryAdd(key, ownerName))
+            if (_task.TryAdd(key, ownerName))
             {
                 Task.Run(async () =>
                 {
@@ -77,6 +84,8 @@ namespace FF.Job.Service
                         _logger.LogTrace($"{key} 开始保存数据");
                         var save = await _gameService.Save();
 
+
+
                         _ = Task.Run(async () =>
                           {
                               _logger.LogTrace($"{key} 开始发放优惠");
@@ -89,7 +98,7 @@ namespace FF.Job.Service
                     }
                     finally
                     {
-                        if (!_dic.TryRemove(key, out _))
+                        if (!_task.TryRemove(key, out _))
                         {
                             _logger.LogError($"{key} 任务删除失败");
                         }
@@ -100,6 +109,11 @@ namespace FF.Job.Service
             {
                 _logger.LogWarning($"{key} 下载任务添加失败");
             }
+        }
+
+        private void DataStat(string ownerName)
+        {
+            
         }
     }
 }
